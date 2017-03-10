@@ -71,4 +71,361 @@ index 52256a7..1d027b9 100644
  #if defined(__APPLE__)
    LOG(INFO) << "OS X does not support NUMA - returning NUMA node zero";
    return 0;
+diff --git a/tensorflow/cc/gradients/math_grad.cc b/tensorflow/cc/gradients/math_grad.cc
+index aff0653..844aa41 100644
+--- a/tensorflow/cc/gradients/math_grad.cc
++++ b/tensorflow/cc/gradients/math_grad.cc
+@@ -105,6 +105,7 @@ Status ExpGrad(const Scope& scope, const Operation& op,
+ }
+ REGISTER_GRADIENT_OP("Exp", ExpGrad);
+
++#if 0
+ Status Expm1Grad(const Scope& scope, const Operation& op,
+                  const std::vector<Output>& grad_inputs,
+                  std::vector<Output>* grad_outputs) {
+@@ -115,6 +116,7 @@ Status Expm1Grad(const Scope& scope, const Operation& op,
+   return scope.status();
+ }
+ REGISTER_GRADIENT_OP("Expm1", Expm1Grad);
++#endif
+
+ Status LogGrad(const Scope& scope, const Operation& op,
+                const std::vector<Output>& grad_inputs,
+diff --git a/tensorflow/cc/gradients/math_grad_test.cc b/tensorflow/cc/gradients/math_grad_test.cc
+index d727892..9b8f3e7 100644
+--- a/tensorflow/cc/gradients/math_grad_test.cc
++++ b/tensorflow/cc/gradients/math_grad_test.cc
+@@ -42,7 +42,7 @@ class CWiseUnaryGradTest : public ::testing::Test {
+     SQRT,
+     RSQRT,
+     EXP,
+-    EXPM1,
++//    EXPM1,
+     LOG,
+     LOG1P,
+     TANH,
+@@ -100,9 +100,9 @@ class CWiseUnaryGradTest : public ::testing::Test {
+       case EXP:
+         y = Exp(scope_, x);
+         break;
+-      case EXPM1:
+-        y = Expm1(scope_, x);
+-        break;
++//      case EXPM1:
++//        y = Expm1(scope_, x);
++//        break;
+       case LOG:
+         y = Log(scope_, x);
+         break;
+@@ -208,6 +208,7 @@ TEST_F(CWiseUnaryGradTest, Exp) {
+   TestCWiseGrad(EXP, x_fn, dy_fn, dx_fn);
+ }
+
++#if 0
+ TEST_F(CWiseUnaryGradTest, Expm1) {
+   auto x_fn = [this](const int i) { return RV({0, -1, 1e-6, 1, -2, 3, 100}); };
+   auto dy_fn = [this](const float x) { return x + RV({-2, 2, -3, 3, -4, 4}); };
+@@ -216,6 +217,7 @@ TEST_F(CWiseUnaryGradTest, Expm1) {
+   };
+   TestCWiseGrad(EXPM1, x_fn, dy_fn, dx_fn);
+ }
++#endif
+
+ TEST_F(CWiseUnaryGradTest, Log) {
+   auto x_fn = [this](const int i) { return RV({-1, 1, -2, 2, -3, 3, -4, 4}); };
+diff --git a/tensorflow/core/kernels/cwise_op_expm1.cc b/tensorflow/core/kernels/cwise_op_expm1.cc
+deleted file mode 100644
+index f1c53ca..0000000
+--- a/tensorflow/core/kernels/cwise_op_expm1.cc
++++ /dev/null
+@@ -1,24 +0,0 @@
+-/* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
+-
+-Licensed under the Apache License, Version 2.0 (the "License");
+-you may not use this file except in compliance with the License.
+-You may obtain a copy of the License at
+-
+-    http://www.apache.org/licenses/LICENSE-2.0
+-
+-Unless required by applicable law or agreed to in writing, software
+-distributed under the License is distributed on an "AS IS" BASIS,
+-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-See the License for the specific language governing permissions and
+-limitations under the License.
+-==============================================================================*/
+-
+-#include "tensorflow/core/kernels/cwise_ops_common.h"
+-
+-namespace tensorflow {
+-REGISTER5(UnaryOp, CPU, "Expm1", functor::expm1, float, Eigen::half, double,
+-          complex64, complex128);
+-#if GOOGLE_CUDA
+-REGISTER3(UnaryOp, GPU, "Expm1", functor::expm1, float, Eigen::half, double);
+-#endif
+-}  // namespace tensorflow
+diff --git a/tensorflow/core/kernels/cwise_op_gpu_expm1.cu.cc b/tensorflow/core/kernels/cwise_op_gpu_expm1.cu.cc
+deleted file mode 100644
+index 755b942..0000000
+--- a/tensorflow/core/kernels/cwise_op_gpu_expm1.cu.cc
++++ /dev/null
+@@ -1,26 +0,0 @@
+-/* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
+-
+-Licensed under the Apache License, Version 2.0 (the "License");
+-you may not use this file except in compliance with the License.
+-You may obtain a copy of the License at
+-
+-    http://www.apache.org/licenses/LICENSE-2.0
+-
+-Unless required by applicable law or agreed to in writing, software
+-distributed under the License is distributed on an "AS IS" BASIS,
+-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-See the License for the specific language governing permissions and
+-limitations under the License.
+-==============================================================================*/
+-
+-#if GOOGLE_CUDA
+-
+-#include "tensorflow/core/kernels/cwise_ops_gpu_common.cu.h"
+-
+-namespace tensorflow {
+-namespace functor {
+-DEFINE_UNARY3(expm1, Eigen::half, float, double);
+-}  // namespace functor
+-}  // namespace tensorflow
+-
+-#endif  // GOOGLE_CUDA
+diff --git a/tensorflow/core/kernels/cwise_ops.h b/tensorflow/core/kernels/cwise_ops.h
+index 3349447..2fb6539 100644
+--- a/tensorflow/core/kernels/cwise_ops.h
++++ b/tensorflow/core/kernels/cwise_ops.h
+@@ -471,8 +471,8 @@ struct rsqrt : base<T, Eigen::internal::scalar_rsqrt_op<T> > {};
+ template <typename T>
+ struct exp : base<T, Eigen::internal::scalar_exp_op<T> > {};
+
+-template <typename T>
+-struct expm1 : base<T, Eigen::internal::scalar_expm1_op<T>> {};
++//template <typename T>
++//struct expm1 : base<T, Eigen::internal::scalar_expm1_op<T>> {};
+
+ template <typename T>
+ struct log : base<T, Eigen::internal::scalar_log_op<T>> {};
+diff --git a/tensorflow/core/ops/compat/ops_history.v0.pbtxt b/tensorflow/core/ops/compat/ops_history.v0.pbtxt
+index cfb7504..a2bf4aa 100644
+--- a/tensorflow/core/ops/compat/ops_history.v0.pbtxt
++++ b/tensorflow/core/ops/compat/ops_history.v0.pbtxt
+@@ -11728,30 +11728,6 @@ op {
+   }
+ }
+ op {
+-  name: "Expm1"
+-  input_arg {
+-    name: "x"
+-    type_attr: "T"
+-  }
+-  output_arg {
+-    name: "y"
+-    type_attr: "T"
+-  }
+-  attr {
+-    name: "T"
+-    type: "type"
+-    allowed_values {
+-      list {
+-        type: DT_HALF
+-        type: DT_FLOAT
+-        type: DT_DOUBLE
+-        type: DT_COMPLEX64
+-        type: DT_COMPLEX128
+-      }
+-    }
+-  }
+-}
+-op {
+   name: "ExtractGlimpse"
+   input_arg {
+     name: "input"
+diff --git a/tensorflow/core/ops/math_grad.cc b/tensorflow/core/ops/math_grad.cc
+index 15bcd53..aa8c13b 100644
+--- a/tensorflow/core/ops/math_grad.cc
++++ b/tensorflow/core/ops/math_grad.cc
+@@ -123,6 +123,7 @@ Status ExpGrad(const AttrSlice& attrs, FunctionDef* g) {
+ }
+ REGISTER_OP_GRADIENT("Exp", ExpGrad);
+
++#if 0
+ Status Expm1Grad(const AttrSlice& attrs, FunctionDef* g) {
+   // clang-format off
+   return GradForUnaryCwise(g, {
+@@ -132,6 +133,7 @@ Status Expm1Grad(const AttrSlice& attrs, FunctionDef* g) {
+   // clang-format on
+ }
+ REGISTER_OP_GRADIENT("Expm1", Expm1Grad);
++#endif
+
+ Status LogGrad(const AttrSlice& attrs, FunctionDef* g) {
+   // clang-format off
+diff --git a/tensorflow/core/ops/math_ops.cc b/tensorflow/core/ops/math_ops.cc
+index 81cacff..75f9f8b 100644
+--- a/tensorflow/core/ops/math_ops.cc
++++ b/tensorflow/core/ops/math_ops.cc
+@@ -278,10 +278,12 @@ REGISTER_OP("Exp").UNARY_COMPLEX().Doc(R"doc(
+ Computes exponential of x element-wise.  \\(y = e^x\\).
+ )doc");
+
++#if 0
+ REGISTER_OP("Expm1").UNARY_COMPLEX().Doc(R"doc(
+ Computes exponential of x - 1 element-wise.
+ I.e., \\(y = (\exp x) - 1\\).
+ )doc");
++#endif
+
+ REGISTER_OP("Log").UNARY_COMPLEX().Doc(R"doc(
+ Computes natural logarithm of x element-wise.
+diff --git a/tensorflow/core/ops/ops.pbtxt b/tensorflow/core/ops/ops.pbtxt
+index e631c28..4adb1f0 100644
+--- a/tensorflow/core/ops/ops.pbtxt
++++ b/tensorflow/core/ops/ops.pbtxt
+@@ -6738,32 +6738,6 @@ op {
+   description: "Given a tensor `input`, this operation inserts a dimension of 1 at the\ndimension index `dim` of `input`\'s shape. The dimension index `dim` starts at\nzero; if you specify a negative number for `dim` it is counted backward from\nthe end.\n\nThis operation is useful if you want to add a batch dimension to a single\nelement. For example, if you have a single image of shape `[height, width,\nchannels]`, you can make it a batch of 1 image with `expand_dims(image, 0)`,\nwhich will make the shape `[1, height, width, channels]`.\n\nOther examples:\n\n```prettyprint\n# \'t\' is a tensor of shape [2]\nshape(expand_dims(t, 0)) ==> [1, 2]\nshape(expand_dims(t, 1)) ==> [2, 1]\nshape(expand_dims(t, -1)) ==> [2, 1]\n\n# \'t2\' is a tensor of shape [2, 3, 5]\nshape(expand_dims(t2, 0)) ==> [1, 2, 3, 5]\nshape(expand_dims(t2, 2)) ==> [2, 3, 1, 5]\nshape(expand_dims(t2, 3)) ==> [2, 3, 5, 1]\n```\n\nThis operation requires that:\n\n`-1-input.dims() <= dim <= input.dims()`\n\nThis operation is related to `squeeze()`, which removes dimensions of\nsize 1."
+ }
+ op {
+-  name: "Expm1"
+-  input_arg {
+-    name: "x"
+-    type_attr: "T"
+-  }
+-  output_arg {
+-    name: "y"
+-    type_attr: "T"
+-  }
+-  attr {
+-    name: "T"
+-    type: "type"
+-    allowed_values {
+-      list {
+-        type: DT_HALF
+-        type: DT_FLOAT
+-        type: DT_DOUBLE
+-        type: DT_COMPLEX64
+-        type: DT_COMPLEX128
+-      }
+-    }
+-  }
+-  summary: "Computes exponential of x - 1 element-wise."
+-  description: "I.e., \\\\(y = (\\exp x) - 1\\\\)."
+-}
+-op {
+   name: "ExtractGlimpse"
+   input_arg {
+     name: "input"
+diff --git a/tensorflow/python/kernel_tests/cwise_ops_test.py b/tensorflow/python/kernel_tests/cwise_ops_test.py
+index cfe2754..ab47a48 100644
+--- a/tensorflow/python/kernel_tests/cwise_ops_test.py
++++ b/tensorflow/python/kernel_tests/cwise_ops_test.py
+@@ -193,7 +193,6 @@ class UnaryOpTest(test.TestCase):
+     self._compareBoth(z, np.sqrt, math_ops.sqrt)
+     self._compareBoth(z, self._rsqrt, math_ops.rsqrt)
+     self._compareBoth(x, np.exp, math_ops.exp)
+-    self._compareBoth(x, np.expm1, math_ops.expm1)
+     self._compareBoth(z, np.log, math_ops.log)
+     self._compareBoth(z, np.log1p, math_ops.log1p)
+     self._compareBoth(x, np.tanh, math_ops.tanh)
+@@ -237,7 +236,6 @@ class UnaryOpTest(test.TestCase):
+     self._compareBoth(x, np.sqrt, math_ops.sqrt)
+     self._compareBoth(x, self._rsqrt, math_ops.rsqrt)
+     self._compareBoth(x, np.exp, math_ops.exp)
+-    self._compareBoth(x, np.expm1, math_ops.expm1)
+     self._compareBoth(x, np.log, math_ops.log)
+     self._compareBoth(x, np.log1p, math_ops.log1p)
+     self._compareBoth(x, np.tanh, math_ops.tanh)
+@@ -277,7 +275,6 @@ class UnaryOpTest(test.TestCase):
+     self._compareBoth(z, np.sqrt, math_ops.sqrt)
+     self._compareBoth(z, self._rsqrt, math_ops.rsqrt)
+     self._compareBoth(x, np.exp, math_ops.exp)
+-    self._compareBoth(x, np.expm1, math_ops.expm1)
+     self._compareBoth(z, np.log, math_ops.log)
+     self._compareBoth(z, np.log1p, math_ops.log1p)
+     self._compareBoth(x, np.tanh, math_ops.tanh)
+@@ -317,7 +314,6 @@ class UnaryOpTest(test.TestCase):
+     self._compareBoth(z, np.sqrt, math_ops.sqrt)
+     self._compareBoth(z, self._rsqrt, math_ops.rsqrt)
+     self._compareBoth(x, np.exp, math_ops.exp)
+-    self._compareBoth(x, np.expm1, math_ops.expm1)
+     self._compareBoth(z, np.log, math_ops.log)
+     self._compareBoth(z, np.log1p, math_ops.log1p)
+     self._compareBoth(x, np.tanh, math_ops.tanh)
+@@ -381,7 +377,6 @@ class UnaryOpTest(test.TestCase):
+     self._compareCpu(y, np.sqrt, math_ops.sqrt)
+     self._compareCpu(y, self._rsqrt, math_ops.rsqrt)
+     self._compareCpu(x, np.exp, math_ops.exp)
+-    self._compareCpu(x, np.expm1, math_ops.expm1)
+     self._compareCpu(y, np.log, math_ops.log)
+     self._compareCpu(y, np.log1p, math_ops.log1p)
+     self._compareCpu(x, np.tanh, math_ops.tanh)
+@@ -415,7 +410,6 @@ class UnaryOpTest(test.TestCase):
+     self._compareCpu(y, np.sqrt, math_ops.sqrt)
+     self._compareCpu(y, self._rsqrt, math_ops.rsqrt)
+     self._compareCpu(x, np.exp, math_ops.exp)
+-    self._compareCpu(x, np.expm1, math_ops.expm1)
+     self._compareCpu(y, np.log, math_ops.log)
+     self._compareCpu(y, np.log1p, math_ops.log1p)
+     self._compareCpu(x, np.tanh, math_ops.tanh)
+diff --git a/tensorflow/python/ops/math_grad.py b/tensorflow/python/ops/math_grad.py
+index e0232b3..e0b8147 100644
+--- a/tensorflow/python/ops/math_grad.py
++++ b/tensorflow/python/ops/math_grad.py
+@@ -329,14 +329,14 @@ def _ExpGrad(op, grad):
+     return grad * y
+
+
+-@ops.RegisterGradient("Expm1")
+-def _Expm1Grad(op, grad):
+-  """Returns grad * exp(x)."""
+-  x = op.inputs[0]
+-  with ops.control_dependencies([grad.op]):
+-    x = math_ops.conj(x)
+-    y = math_ops.exp(x)
+-    return grad * y
++#@ops.RegisterGradient("Expm1")
++#def _Expm1Grad(op, grad):
++#  """Returns grad * exp(x)."""
++#  x = op.inputs[0]
++#  with ops.control_dependencies([grad.op]):
++#    x = math_ops.conj(x)
++#    y = math_ops.exp(x)
++#    return grad * y
+
+
+ @ops.RegisterGradient("Log")
+diff --git a/tensorflow/python/ops/math_ops.py b/tensorflow/python/ops/math_ops.py
+index ecb1af6..06650ba 100644
+--- a/tensorflow/python/ops/math_ops.py
++++ b/tensorflow/python/ops/math_ops.py
+@@ -40,7 +40,6 @@
+ @@rsqrt
+ @@pow
+ @@exp
+-@@expm1
+ @@log
+ @@log1p
+ @@ceil
+diff --git a/tensorflow/workspace.bzl b/tensorflow/workspace.bzl
+index 085dad0..be6d0e2 100644
+--- a/tensorflow/workspace.bzl
++++ b/tensorflow/workspace.bzl
+@@ -65,11 +65,9 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
+   native.new_http_archive(
+       name = "eigen_archive",
+       urls = [
+-          "http://bazel-mirror.storage.googleapis.com/bitbucket.org/eigen/eigen/get/60578b474802.tar.gz",
+-          "https://bitbucket.org/eigen/eigen/get/60578b474802.tar.gz",
++          "https://bitbucket.org/eigen/eigen/get/46ee714e25d5.tar.gz",
+       ],
+-      sha256 = "7527cda827aff351981ebd910012e16be4d899c28a9ae7f143ae60e7f3f7b83d",
+-      strip_prefix = "eigen-eigen-60578b474802",
++      strip_prefix = "eigen-eigen-46ee714e25d5",
+       build_file = str(Label("//third_party:eigen.BUILD")),
+   )
+
 
