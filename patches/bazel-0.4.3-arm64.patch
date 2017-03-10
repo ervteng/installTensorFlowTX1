@@ -1,0 +1,41 @@
+diff --git a/src/main/java/com/google/devtools/build/lib/util/CPU.java b/src/main/java/com/google/devtools/build/lib/util/CPU.java
+index 7a85c29..ccd95bd 100644
+--- a/src/main/java/com/google/devtools/build/lib/util/CPU.java
++++ b/src/main/java/com/google/devtools/build/lib/util/CPU.java
+@@ -25,7 +25,7 @@ public enum CPU {
+   X86_32("x86_32", ImmutableSet.of("i386", "i486", "i586", "i686", "i786", "x86")),
+   X86_64("x86_64", ImmutableSet.of("amd64", "x86_64", "x64")),
+   PPC("ppc", ImmutableSet.of("ppc", "ppc64", "ppc64le")),
+-  ARM("arm", ImmutableSet.of("arm", "armv7l")),
++  ARM("arm", ImmutableSet.of("arm", "armv7l","aarch64")),
+   S390X("s390x", ImmutableSet.of("s390x", "s390")),
+   UNKNOWN("unknown", ImmutableSet.<String>of());
+ 
+diff --git a/tools/cpp/cc_configure.bzl b/tools/cpp/cc_configure.bzl
+index 330a068..20fd2ac 100644
+--- a/tools/cpp/cc_configure.bzl
++++ b/tools/cpp/cc_configure.bzl
+@@ -140,6 +140,8 @@ def _get_cpu_value(repository_ctx):
+     return "x64_windows"
+   # Use uname to figure out whether we are on x86_32 or x86_64
+   result = repository_ctx.execute(["uname", "-m"])
++  if result.stdout.strip() in ["aarch64"]:
++    return "arm"
+   return "k8" if result.stdout.strip() in ["amd64", "x86_64", "x64"] else "piii"
+@@ -225,15 +225,16 @@ def _crosstool_content(repository_ctx, cc, cpu_value, darwin):
+               "-B" + str(repository_ctx.path(cc).dirname),
+               # Always have -B/usr/bin, see https://github.com/bazelbuild/bazel/issues/760.
+               "-B/usr/bin",
+-              # Have gcc return the exit code from ld.
+-              "-pass-exit-codes",
+               # Stamp the binary with a unique identifier.
+               "-Wl,--build-id=md5",
+               "-Wl,--hash-style=gnu"
+               # Gold linker only? Can we enable this by default?
+               # "-Wl,--warn-execstack",
+               # "-Wl,--detect-odr-violations"
+-          ]),
++          ]) + _add_option_if_supported(
++              # Have gcc return the exit code from ld.
++              repository_ctx, cc, "-pass-exit-codes"
+

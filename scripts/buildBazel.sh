@@ -4,11 +4,12 @@
 # Build Bazel
 INSTALL_DIR=$PWD
 cd $HOME
-git clone https://github.com/bazelbuild/bazel.git
-cd bazel
-git checkout 0.3.2
-cp ../protobuf/src/protoc third_party/protobuf/protoc-linux-arm32.exe
-cp ../grpc-java/compiler/build/exe/java_plugin/protoc-gen-grpc-java third_party/grpc/protoc-gen-grpc-java-0.15.0-linux-arm32.exe
-patch -p1 < $INSTALL_DIR/patches/bazel.patch
-./compile.sh 
+# zip in release 0.4.3 includes working arm32 binaries for bootstrapping
+wget https://github.com/bazelbuild/bazel/releases/download/0.4.3/bazel-0.4.3-dist.zip --no-check-certificate
+mkdir bazel-0.4.3
+cd bazel-0.4.3/
+unzip ../bazel-0.4.3-dist.zip
+# yet bazel needs to be patched to compile (and run correctly) on aarch64
+patch -p1 <$INSTALL_DIR/patches/bazel-0.4.3-arm64.patch
+./compile.sh
 sudo cp output/bazel /usr/local/bin
