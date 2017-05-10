@@ -3,7 +3,7 @@
 # TensorFlow Installation
 # Build TensorFlow
 
-cd $HOME/tensorflow
+cd ../tensorflow
 # Setup the environment variables for configuration
 # PYTHON Path is the default
 default_python_bin_path=$(which python)
