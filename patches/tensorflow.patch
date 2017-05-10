@@ -1,76 +1,3 @@
-diff --git a/tensorflow/core/kernels/BUILD b/tensorflow/core/kernels/BUILD
-index 2e04827..9d81923 100644
---- a/tensorflow/core/kernels/BUILD
-+++ b/tensorflow/core/kernels/BUILD
-@@ -1184,7 +1184,7 @@ tf_kernel_libraries(
-         "segment_reduction_ops",
-         "scan_ops",
-         "sequence_ops",
--        "sparse_matmul_op",
-+        #DC "sparse_matmul_op",
-     ],
-     deps = [
-         ":bounds_check",
-diff --git a/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc b/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc
-index 02058a8..880a0c3 100644
---- a/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc
-+++ b/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc
-@@ -43,8 +43,14 @@ struct BatchSelectFunctor<GPUDevice, T> {
-     const int all_but_batch = then_flat_outer_dims.dimension(1);
-
- #if !defined(EIGEN_HAS_INDEX_LIST)
--    Eigen::array<int, 2> broadcast_dims{{ 1, all_but_batch }};
--    Eigen::Tensor<int, 2>::Dimensions reshape_dims{{ batch, 1 }};
-+    // Eigen::array<int, 2> broadcast_dims{{ 1, all_but_batch }};
-+    Eigen::array<int, 2> broadcast_dims;
-+   broadcast_dims[0] = 1;
-+    broadcast_dims[1] = all_but_batch;
-+    // Eigen::Tensor<int, 2>::Dimensions reshape_dims{{ batch, 1 }};
-+    Eigen::Tensor<int, 2>::Dimensions reshape_dims;
-+   reshape_dims[0] = batch;
-+   reshape_dims[1] = 1;
- #else
-     Eigen::IndexList<Eigen::type2index<1>, int> broadcast_dims;
-     broadcast_dims.set(1, all_but_batch);
-diff --git a/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc b/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc
-index a177696..28d2f59 100644
---- a/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc
-+++ b/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc
-@@ -104,9 +104,17 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, ADJ_A, ADJ_B> {
-     int n = (ADJ_B) ? b.dimension(0) : b.dimension(1);
-
- #if !defined(EIGEN_HAS_INDEX_LIST)
--    Eigen::Tensor<int, 2>::Dimensions matrix_1_by_nnz{{ 1, nnz }};
--    Eigen::array<int, 2> n_by_1{{ n, 1 }};
--    Eigen::array<int, 1> reduce_on_rows{{ 0 }};
-+    // Eigen::Tensor<int, 2>::Dimensions matrix_1_by_nnz{{ 1, nnz }};
-+    Eigen::Tensor<int, 2>::Dimensions matrix_1_by_nnz;
-+   matrix_1_by_nnz[0] = 1;
-+   matrix_1_by_nnz[1] = nnz;
-+    // Eigen::array<int, 2> n_by_1{{ n, 1 }};
-+    Eigen::array<int, 2> n_by_1;
-+   n_by_1[0] = n;
-+   n_by_1[1] = 1;
-+    // Eigen::array<int, 1> reduce_on_rows{{ 0 }};
-+    Eigen::array<int, 1> reduce_on_rows;
-+   reduce_on_rows[0]= 0;
- #else
-     Eigen::IndexList<Eigen::type2index<1>, int> matrix_1_by_nnz;
-     matrix_1_by_nnz.set(1, nnz);
-diff --git a/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc b/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc
-index 52256a7..1d027b9 100644
---- a/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc
-+++ b/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc
-@@ -888,6 +888,9 @@ CudaContext* CUDAExecutor::cuda_context() { return context_; }
- // For anything more complicated/prod-focused than this, you'll likely want to
- // turn to gsys' topology modeling.
- static int TryToReadNumaNode(const string &pci_bus_id, int device_ordinal) {
-+// DC - make this clever later. ARM has no NUMA node, just return 0
-+LOG(INFO) << "ARM has no NUMA node, hardcoding to return zero";
-+return 0;
- #if defined(__APPLE__)
-   LOG(INFO) << "OS X does not support NUMA - returning NUMA node zero";
-   return 0;
 diff --git a/tensorflow/cc/gradients/math_grad.cc b/tensorflow/cc/gradients/math_grad.cc
 index aff0653..844aa41 100644
 --- a/tensorflow/cc/gradients/math_grad.cc
@@ -78,7 +5,7 @@ index aff0653..844aa41 100644
 @@ -105,6 +105,7 @@ Status ExpGrad(const Scope& scope, const Operation& op,
  }
  REGISTER_GRADIENT_OP("Exp", ExpGrad);
-
+ 
 +#if 0
  Status Expm1Grad(const Scope& scope, const Operation& op,
                   const std::vector<Output>& grad_inputs,
@@ -88,7 +15,7 @@ index aff0653..844aa41 100644
  }
  REGISTER_GRADIENT_OP("Expm1", Expm1Grad);
 +#endif
-
+ 
  Status LogGrad(const Scope& scope, const Operation& op,
                 const std::vector<Output>& grad_inputs,
 diff --git a/tensorflow/cc/gradients/math_grad_test.cc b/tensorflow/cc/gradients/math_grad_test.cc
@@ -120,7 +47,7 @@ index d727892..9b8f3e7 100644
 @@ -208,6 +208,7 @@ TEST_F(CWiseUnaryGradTest, Exp) {
    TestCWiseGrad(EXP, x_fn, dy_fn, dx_fn);
  }
-
+ 
 +#if 0
  TEST_F(CWiseUnaryGradTest, Expm1) {
    auto x_fn = [this](const int i) { return RV({0, -1, 1e-6, 1, -2, 3, 100}); };
@@ -130,39 +57,9 @@ index d727892..9b8f3e7 100644
    TestCWiseGrad(EXPM1, x_fn, dy_fn, dx_fn);
  }
 +#endif
-
+ 
  TEST_F(CWiseUnaryGradTest, Log) {
    auto x_fn = [this](const int i) { return RV({-1, 1, -2, 2, -3, 3, -4, 4}); };
-diff --git a/tensorflow/core/kernels/cwise_op_expm1.cc b/tensorflow/core/kernels/cwise_op_expm1.cc
-deleted file mode 100644
-index f1c53ca..0000000
---- a/tensorflow/core/kernels/cwise_op_expm1.cc
-+++ /dev/null
-@@ -1,24 +0,0 @@
--/* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
--
--Licensed under the Apache License, Version 2.0 (the "License");
--you may not use this file except in compliance with the License.
--You may obtain a copy of the License at
--
--    http://www.apache.org/licenses/LICENSE-2.0
--
--Unless required by applicable law or agreed to in writing, software
--distributed under the License is distributed on an "AS IS" BASIS,
--WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--See the License for the specific language governing permissions and
--limitations under the License.
--==============================================================================*/
--
--#include "tensorflow/core/kernels/cwise_ops_common.h"
--
--namespace tensorflow {
--REGISTER5(UnaryOp, CPU, "Expm1", functor::expm1, float, Eigen::half, double,
--          complex64, complex128);
--#if GOOGLE_CUDA
--REGISTER3(UnaryOp, GPU, "Expm1", functor::expm1, float, Eigen::half, double);
--#endif
--}  // namespace tensorflow
 diff --git a/tensorflow/core/kernels/cwise_op_gpu_expm1.cu.cc b/tensorflow/core/kernels/cwise_op_gpu_expm1.cu.cc
 deleted file mode 100644
 index 755b942..0000000
@@ -195,23 +92,69 @@ index 755b942..0000000
 -}  // namespace tensorflow
 -
 -#endif  // GOOGLE_CUDA
+diff --git a/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc b/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc
+index a54dbdf..a108b2e 100644
+--- a/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc
++++ b/tensorflow/core/kernels/cwise_op_gpu_select.cu.cc
+@@ -65,8 +65,14 @@ struct BatchSelectFunctor<GPUDevice, T> {
+     const int all_but_batch = then_flat_outer_dims.dimension(1);
+ 
+ #if !defined(EIGEN_HAS_INDEX_LIST)
+-    Eigen::array<int, 2> broadcast_dims{{ 1, all_but_batch }};
+-    Eigen::Tensor<int, 2>::Dimensions reshape_dims{{ batch, 1 }};
++    // Eigen::array<int, 2> broadcast_dims{{ 1, all_but_batch }};
++    Eigen::array<int, 2> broadcast_dims;
++   broadcast_dims[0] = 1;
++    broadcast_dims[1] = all_but_batch;
++    // Eigen::Tensor<int, 2>::Dimensions reshape_dims{{ batch, 1 }};
++    Eigen::Tensor<int, 2>::Dimensions reshape_dims;
++   reshape_dims[0] = batch;
++   reshape_dims[1] = 1;
+ #else
+     Eigen::IndexList<Eigen::type2index<1>, int> broadcast_dims;
+     broadcast_dims.set(1, all_but_batch);
 diff --git a/tensorflow/core/kernels/cwise_ops.h b/tensorflow/core/kernels/cwise_ops.h
-index 3349447..2fb6539 100644
+index fb4c649..7edce83 100644
 --- a/tensorflow/core/kernels/cwise_ops.h
 +++ b/tensorflow/core/kernels/cwise_ops.h
 @@ -471,8 +471,8 @@ struct rsqrt : base<T, Eigen::internal::scalar_rsqrt_op<T> > {};
  template <typename T>
  struct exp : base<T, Eigen::internal::scalar_exp_op<T> > {};
-
+ 
 -template <typename T>
 -struct expm1 : base<T, Eigen::internal::scalar_expm1_op<T>> {};
 +//template <typename T>
 +//struct expm1 : base<T, Eigen::internal::scalar_expm1_op<T>> {};
-
+ 
  template <typename T>
  struct log : base<T, Eigen::internal::scalar_log_op<T>> {};
+diff --git a/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc b/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc
+index a177696..6cd71da 100644
+--- a/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc
++++ b/tensorflow/core/kernels/sparse_tensor_dense_matmul_op_gpu.cu.cc
+@@ -104,9 +104,17 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, ADJ_A, ADJ_B> {
+     int n = (ADJ_B) ? b.dimension(0) : b.dimension(1);
+ 
+ #if !defined(EIGEN_HAS_INDEX_LIST)
+-    Eigen::Tensor<int, 2>::Dimensions matrix_1_by_nnz{{ 1, nnz }};
+-    Eigen::array<int, 2> n_by_1{{ n, 1 }};
+-    Eigen::array<int, 1> reduce_on_rows{{ 0 }};
++    // Eigen::Tensor<int, 2>::Dimensions matrix_1_by_nnz{{ 1, nnz }};
++    Eigen::Tensor<int, 2>::Dimensions matrix_1_by_nnz;
++   matrix_1_by_nnz[0] = 1;
++   matrix_1_by_nnz[1] = nnz;
++    // Eigen::array<int, 2> n_by_1{{ n, 1 }};
++    Eigen::array<int, 2> n_by_1;
++   n_by_1[0] = n;
++   n_by_1[1] = 1;
++    // Eigen::array<int, 1> reduce_on_rows{{ 0 }};
++    Eigen::array<int, 1> reduce_on_rows;
++   reduce_on_rows[0]= 0;
+ #else
+     Eigen::IndexList<Eigen::type2index<1>, int> matrix_1_by_nnz;
+     matrix_1_by_nnz.set(1, nnz);
 diff --git a/tensorflow/core/ops/compat/ops_history.v0.pbtxt b/tensorflow/core/ops/compat/ops_history.v0.pbtxt
-index cfb7504..a2bf4aa 100644
+index 38e9108..70c633a 100644
 --- a/tensorflow/core/ops/compat/ops_history.v0.pbtxt
 +++ b/tensorflow/core/ops/compat/ops_history.v0.pbtxt
 @@ -11728,30 +11728,6 @@ op {
@@ -246,13 +189,13 @@ index cfb7504..a2bf4aa 100644
    input_arg {
      name: "input"
 diff --git a/tensorflow/core/ops/math_grad.cc b/tensorflow/core/ops/math_grad.cc
-index 15bcd53..aa8c13b 100644
+index a530d28..79bc11a 100644
 --- a/tensorflow/core/ops/math_grad.cc
 +++ b/tensorflow/core/ops/math_grad.cc
 @@ -123,6 +123,7 @@ Status ExpGrad(const AttrSlice& attrs, FunctionDef* g) {
  }
  REGISTER_OP_GRADIENT("Exp", ExpGrad);
-
+ 
 +#if 0
  Status Expm1Grad(const AttrSlice& attrs, FunctionDef* g) {
    // clang-format off
@@ -262,31 +205,31 @@ index 15bcd53..aa8c13b 100644
  }
  REGISTER_OP_GRADIENT("Expm1", Expm1Grad);
 +#endif
-
+ 
  Status LogGrad(const AttrSlice& attrs, FunctionDef* g) {
    // clang-format off
 diff --git a/tensorflow/core/ops/math_ops.cc b/tensorflow/core/ops/math_ops.cc
-index 81cacff..75f9f8b 100644
+index 4c722b3..c8ade15 100644
 --- a/tensorflow/core/ops/math_ops.cc
 +++ b/tensorflow/core/ops/math_ops.cc
 @@ -278,10 +278,12 @@ REGISTER_OP("Exp").UNARY_COMPLEX().Doc(R"doc(
  Computes exponential of x element-wise.  \\(y = e^x\\).
  )doc");
-
+ 
 +#if 0
  REGISTER_OP("Expm1").UNARY_COMPLEX().Doc(R"doc(
  Computes exponential of x - 1 element-wise.
  I.e., \\(y = (\exp x) - 1\\).
  )doc");
 +#endif
-
+ 
  REGISTER_OP("Log").UNARY_COMPLEX().Doc(R"doc(
  Computes natural logarithm of x element-wise.
 diff --git a/tensorflow/core/ops/ops.pbtxt b/tensorflow/core/ops/ops.pbtxt
-index e631c28..4adb1f0 100644
+index bcd8bd5..9917f4e 100644
 --- a/tensorflow/core/ops/ops.pbtxt
 +++ b/tensorflow/core/ops/ops.pbtxt
-@@ -6738,32 +6738,6 @@ op {
+@@ -6890,32 +6890,6 @@ op {
    description: "Given a tensor `input`, this operation inserts a dimension of 1 at the\ndimension index `dim` of `input`\'s shape. The dimension index `dim` starts at\nzero; if you specify a negative number for `dim` it is counted backward from\nthe end.\n\nThis operation is useful if you want to add a batch dimension to a single\nelement. For example, if you have a single image of shape `[height, width,\nchannels]`, you can make it a batch of 1 image with `expand_dims(image, 0)`,\nwhich will make the shape `[1, height, width, channels]`.\n\nOther examples:\n\n```prettyprint\n# \'t\' is a tensor of shape [2]\nshape(expand_dims(t, 0)) ==> [1, 2]\nshape(expand_dims(t, 1)) ==> [2, 1]\nshape(expand_dims(t, -1)) ==> [2, 1]\n\n# \'t2\' is a tensor of shape [2, 3, 5]\nshape(expand_dims(t2, 0)) ==> [1, 2, 3, 5]\nshape(expand_dims(t2, 2)) ==> [2, 3, 1, 5]\nshape(expand_dims(t2, 3)) ==> [2, 3, 5, 1]\n```\n\nThis operation requires that:\n\n`-1-input.dims() <= dim <= input.dims()`\n\nThis operation is related to `squeeze()`, which removes dimensions of\nsize 1."
  }
  op {
@@ -372,13 +315,13 @@ index cfe2754..ab47a48 100644
      self._compareCpu(y, np.log1p, math_ops.log1p)
      self._compareCpu(x, np.tanh, math_ops.tanh)
 diff --git a/tensorflow/python/ops/math_grad.py b/tensorflow/python/ops/math_grad.py
-index e0232b3..e0b8147 100644
+index 8aa8de5..3a0dca3 100644
 --- a/tensorflow/python/ops/math_grad.py
 +++ b/tensorflow/python/ops/math_grad.py
-@@ -329,14 +329,14 @@ def _ExpGrad(op, grad):
+@@ -341,14 +341,14 @@ def _ExpGrad(op, grad):
      return grad * y
-
-
+ 
+ 
 -@ops.RegisterGradient("Expm1")
 -def _Expm1Grad(op, grad):
 -  """Returns grad * exp(x)."""
@@ -395,14 +338,14 @@ index e0232b3..e0b8147 100644
 +#    x = math_ops.conj(x)
 +#    y = math_ops.exp(x)
 +#    return grad * y
-
-
+ 
+ 
  @ops.RegisterGradient("Log")
 diff --git a/tensorflow/python/ops/math_ops.py b/tensorflow/python/ops/math_ops.py
-index ecb1af6..06650ba 100644
+index d393174..5df9fb0 100644
 --- a/tensorflow/python/ops/math_ops.py
 +++ b/tensorflow/python/ops/math_ops.py
-@@ -40,7 +40,6 @@
+@@ -42,7 +42,6 @@ See the @{$python/math_ops} guide.
  @@rsqrt
  @@pow
  @@exp
@@ -410,22 +353,47 @@ index ecb1af6..06650ba 100644
  @@log
  @@log1p
  @@ceil
+diff --git a/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc b/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc
+index 1bb90af..fe3fb5a 100644
+--- a/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc
++++ b/tensorflow/stream_executor/cuda/cuda_gpu_executor.cc
+@@ -861,6 +861,9 @@ CudaContext* CUDAExecutor::cuda_context() { return context_; }
+ // For anything more complicated/prod-focused than this, you'll likely want to
+ // turn to gsys' topology modeling.
+ static int TryToReadNumaNode(const string &pci_bus_id, int device_ordinal) {
++// DC - make this clever later. ARM has no NUMA node, just return 0
++LOG(INFO) << "ARM has no NUMA node, hardcoding to return zero";
++return 0;
+ #if defined(__APPLE__)
+   LOG(INFO) << "OS X does not support NUMA - returning NUMA node zero";
+   return 0;
 diff --git a/tensorflow/workspace.bzl b/tensorflow/workspace.bzl
-index 085dad0..be6d0e2 100644
+index 25aecb5..b529918 100644
 --- a/tensorflow/workspace.bzl
 +++ b/tensorflow/workspace.bzl
-@@ -65,11 +65,9 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
+@@ -74,11 +74,9 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
    native.new_http_archive(
        name = "eigen_archive",
        urls = [
--          "http://bazel-mirror.storage.googleapis.com/bitbucket.org/eigen/eigen/get/60578b474802.tar.gz",
--          "https://bitbucket.org/eigen/eigen/get/60578b474802.tar.gz",
+-          "http://bazel-mirror.storage.googleapis.com/bitbucket.org/eigen/eigen/get/9c6361787292.tar.gz",
+-          "https://bitbucket.org/eigen/eigen/get/9c6361787292.tar.gz",
 +          "https://bitbucket.org/eigen/eigen/get/46ee714e25d5.tar.gz",
        ],
--      sha256 = "7527cda827aff351981ebd910012e16be4d899c28a9ae7f143ae60e7f3f7b83d",
--      strip_prefix = "eigen-eigen-60578b474802",
+-      sha256 = "e6ec2502a5d82dd5df0b9b16e7697f5fccb81c322d0be8e3492969eecb66badd",
+-      strip_prefix = "eigen-eigen-9c6361787292",
 +      strip_prefix = "eigen-eigen-46ee714e25d5",
        build_file = str(Label("//third_party:eigen.BUILD")),
    )
-
-
+ 
+diff --git a/third_party/gpus/cuda_configure.bzl b/third_party/gpus/cuda_configure.bzl
+index 06e54d7..05bd593 100644
+--- a/third_party/gpus/cuda_configure.bzl
++++ b/third_party/gpus/cuda_configure.bzl
+@@ -826,7 +826,6 @@ def _cuda_autoconf_impl(repository_ctx):
+ 
+ cuda_configure = repository_rule(
+     implementation = _cuda_autoconf_impl,
+-    local = True,
+ )
+ """Detects and configures the local CUDA toolchain.
+ 
